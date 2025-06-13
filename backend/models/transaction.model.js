@@ -1,15 +1,27 @@
-const { DataTypes } = require('sequelize');
-module.exports = (sequelize) =>
-  sequelize.define(
-    'Transaction',
-    {
-      id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-      user_id: { type: DataTypes.INTEGER, allowNull: false },
-      type: { type: DataTypes.ENUM('deposit', 'transfer', 'receive'), allowNull: false },
-      amount: { type: DataTypes.DECIMAL(18, 2), allowNull: false },
-      status: { type: DataTypes.ENUM('pending', 'completed', 'failed'), defaultValue: 'completed' },
-      related_user_id: { type: DataTypes.INTEGER, allowNull: true },
-      description: { type: DataTypes.STRING(255) }
-    },
-    { tableName: 'Transaction', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' }
-  );
+import { pool } from "./db.js";
+
+export const Transaction = {
+  async create(data) {
+    const { user_id, to_user_id, type, amount, status, description } = data;
+    const [res] = await pool.query(
+      "INSERT INTO transactions (user_id, to_user_id, type, amount, status, description) VALUES (?, ?, ?, ?, ?, ?)",
+      [user_id, to_user_id, type, amount, status, description]
+    );
+    return res.insertId;
+  },
+  async findByUser(user_id) {
+    const [rows] = await pool.query(
+      "SELECT * FROM transactions WHERE user_id=? OR to_user_id=? ORDER BY created_at DESC",
+      [user_id, user_id]
+    );
+    return rows;
+  },
+  async findAll() {
+    const [rows] = await pool.query("SELECT * FROM transactions ORDER BY created_at DESC");
+    return rows;
+  },
+  async findById(id) {
+    const [rows] = await pool.query("SELECT * FROM transactions WHERE id=?", [id]);
+    return rows[0];
+  }
+};

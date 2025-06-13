@@ -1,78 +1,46 @@
-const { User, Contact, Transaction } = require('../models');
-const bcrypt = require('bcryptjs');
-const { Op } = require('sequelize');
+import { User } from "../models/user.model.js";
+import { Transaction } from "../models/transaction.model.js";
+import { Notification } from "../models/notification.model.js";
+import { Contact } from "../models/contact.model.js";
+import bcrypt from "bcrypt";
 
-exports.getProfile = async (req, res) => {
-  const user = req.user;
-  res.json({
-    id: user.id,
-    username: user.username,
-    email: user.email,
-    full_name: user.full_name,
-    phone: user.phone,
-    avatar_url: user.avatar_url,
-    balance: user.balance,
-    is_locked: user.is_locked,
-    two_fa_enabled: user.two_fa_enabled,
-    created_at: user.created_at
-  });
-};
-
-exports.updateProfile = async (req, res) => {
-  const user = req.user;
-  const { full_name, phone, avatar_url } = req.body;
-  await user.update({ full_name, phone, avatar_url });
-  res.json({ message: "Profile updated" });
-};
-
-exports.changePassword = async (req, res) => {
-  const user = req.user;
-  const { old_password, new_password } = req.body;
-  if (!await bcrypt.compare(old_password, user.password_hash))
-    return res.status(400).json({ message: "Old password not match" });
-  const hash = await bcrypt.hash(new_password, 10);
-  await user.update({ password_hash: hash });
-  res.json({ message: "Password changed" });
-};
-
-exports.lockAccount = async (req, res) => {
-  const user = req.user;
-  await user.update({ is_locked: true });
-  res.json({ message: "Account locked" });
-};
-
-exports.unlockAccount = async (req, res) => {
-  const user = req.user;
-  await user.update({ is_locked: false });
-  res.json({ message: "Account unlocked" });
-};
-
-exports.toggle2FA = async (req, res) => {
-  const user = req.user;
-  const enable = req.body.enable === true;
-  await user.update({ two_fa_enabled: enable });
-  res.json({ message: enable ? "2FA enabled" : "2FA disabled" });
-};
-
-exports.getContacts = async (req, res) => {
-  const contacts = await Contact.findAll({
-    where: { user_id: req.user.id },
-    include: [{ association: 'contactUser', attributes: ['id', 'username', 'full_name', 'avatar_url'] }]
-  });
-  res.json(contacts);
-};
-
-exports.addContact = async (req, res) => {
-  const { contact_user_id, nickname } = req.body;
-  if (contact_user_id == req.user.id) return res.status(400).json({ message: "Cannot add yourself" });
-  const exist = await Contact.findOne({ where: { user_id: req.user.id, contact_user_id } });
-  if (exist) return res.status(400).json({ message: "Already in contacts" });
-  await Contact.create({ user_id: req.user.id, contact_user_id, nickname });
-  res.json({ message: "Contact added" });
-};
-
-exports.deleteContact = async (req, res) => {
-  const { contact_user_id } = req.body;
-  await Contact.destroy({ where: { user_id: req.user.id, contact_user_id } });
-  res.json({ message: "Contact deleted" });
+export const UserController = {
+  async getProfile(req, res) {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json(user);
+  },
+  async updateProfile(req, res) {
+    const { username, phone, avatar } = req.body;
+    await User.updateProfile(req.user.id, { username, phone, avatar });
+    res.json({ message: "Cập nhật thành công" });
+  },
+  async changePassword(req, res) {
+    const { oldPassword, newPassword } = req.body;
+    const user = await User.findById(req.user.id);
+    const match = await bcrypt.compare(oldPassword, user.password_hash);
+    if (!match) return res.status(400).json({ message: "Sai mật khẩu cũ" });
+    const password_hash = await bcrypt.hash(newPassword, 10);
+    await User.changePassword(req.user.id, password_hash);
+    res.json({ message: "Đổi mật khẩu thành công" });
+  },
+  async getBalance(req, res) {
+    const user = await User.findById(req.user.id);
+    res.json({ balance: user.balance });
+  },
+  async getContacts(req, res) {
+    const contacts = await Contact.findByUser(req.user.id);
+    res.json(contacts);
+  },
+  async addContact(req, res) {
+    const { contact_user_id, nickname } = req.body;
+    if (contact_user_id === req.user.id) return res.status(400).json({ message: "Không thể thêm chính bạn" });
+    await Contact.create({ user_id: req.user.id, contact_user_id, nickname });
+    res.json({ message: "Đã thêm vào danh bạ" });
+  },
+  async removeContact(req, res) {
+    const { contact_user_id } = req.body;
+    await Contact.delete(req.user.id, contact_user_id);
+    res.json({ message: "Đã xoá khỏi danh bạ" });
+  }
 };

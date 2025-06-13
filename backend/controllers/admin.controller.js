@@ -1,54 +1,36 @@
-const { User, Transaction, Notification } = require('../models');
-const { Op, fn, col } = require('sequelize');
+import { User } from "../models/user.model.js";
+import { Transaction } from "../models/transaction.model.js";
+import { Notification } from "../models/notification.model.js";
 
-exports.getUsers = async (req, res) => {
-  const users = await User.findAll({
-    attributes: ['id', 'username', 'email', 'full_name', 'balance', 'is_locked', 'created_at']
-  });
-  res.json(users);
-};
-
-exports.lockUser = async (req, res) => {
-  const { user_id } = req.body;
-  const user = await User.findByPk(user_id);
-  if (!user) return res.status(404).json({ message: "User not found" });
-  await user.update({ is_locked: true });
-  res.json({ message: "User locked" });
-};
-
-exports.unlockUser = async (req, res) => {
-  const { user_id } = req.body;
-  const user = await User.findByPk(user_id);
-  if (!user) return res.status(404).json({ message: "User not found" });
-  await user.update({ is_locked: false });
-  res.json({ message: "User unlocked" });
-};
-
-exports.getTransactions = async (req, res) => {
-  const transactions = await Transaction.findAll({
-    include: [
-      { model: User, as: 'relatedUser', attributes: ['id', 'username'] }
-    ],
-    order: [['created_at', 'DESC']]
-  });
-  res.json(transactions);
-};
-
-exports.statistics = async (req, res) => {
-  // Tổng tiền hệ thống
-  const total = await User.sum('balance');
-  // 5 giao dịch nổi bật nhất (giao dịch lớn nhất)
-  const top = await Transaction.findAll({
-    order: [['amount', 'DESC']],
-    limit: 5
-  });
-  res.json({ total, top });
-};
-
-exports.getNotifications = async (req, res) => {
-  const notifications = await Notification.findAll({
-    order: [['created_at', 'DESC']],
-    limit: 100
-  });
-  res.json(notifications);
+export const AdminController = {
+  async listUsers(req, res) {
+    const users = await User.findAll();
+    res.json(users);
+  },
+  async lockUser(req, res) {
+    const { user_id } = req.body;
+    await User.setLock(user_id, 1);
+    res.json({ message: "Đã khoá tài khoản" });
+  },
+  async unlockUser(req, res) {
+    const { user_id } = req.body;
+    await User.setLock(user_id, 0);
+    res.json({ message: "Đã mở khoá tài khoản" });
+  },
+  async listTransactions(req, res) {
+    const trans = await Transaction.findAll();
+    res.json(trans);
+  },
+  async dashboard(req, res) {
+    // Tổng tiền hệ thống, top giao dịch
+    const users = await User.findAll();
+    const transactions = await Transaction.findAll();
+    const total = users.reduce((s, u) => s + Number(u.balance || 0), 0);
+    const top = transactions.slice(0, 5);
+    res.json({ total_balance: total, top_transactions: top });
+  },
+  async notifications(req, res) {
+    const noti = await Notification.findAll();
+    res.json(noti);
+  }
 };

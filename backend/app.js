@@ -1,17 +1,25 @@
-const express = require('express');
-const cors = require('cors');
-const { sequelize } = require('./models');
+import express from "express";
+import cors from "cors";
+import bodyParser from "body-parser";
+import dotenv from "dotenv";
+dotenv.config();
+
+import authRoute from "./routes/auth.route.js";
+import userRoute from "./routes/user.route.js";
+import transactionRoute from "./routes/transaction.route.js";
+import notificationRoute from "./routes/notification.route.js";
+import adminRoute from "./routes/admin.route.js";
+
 const app = express();
-
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-app.use('/api/auth', require('./routes/auth.routes'));
-app.use('/api/user', require('./routes/user.routes'));
-app.use('/api/transaction', require('./routes/transaction.routes'));
-app.use('/api/admin', require('./routes/admin.routes'));
-app.use('/api/notification', require('./routes/notification.routes'));
+app.use("/api/auth", authRoute);
+app.use("/api/user", userRoute);
+app.use("/api/transaction", transactionRoute);
+app.use("/api/notification", notificationRoute);
+app.use("/api/admin", adminRoute);
 
-app.get('/', (req, res) => res.send('E-Wallet API running!'));
+app.get("/", (req, res) => res.json({ message: "E-Wallet API Running" }));
 
-module.exports = app;
+export default app;

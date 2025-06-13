@@ -1,9 +1,6 @@
-const app = require('./app');
-const { port } = require('./config');
-const { sequelize } = require('./models');
+import app from "./app.js";
 
-sequelize.sync({ alter: false }).then(() => {
-  app.listen(port, () => {
-    console.log(`Backend running at http://localhost:${port}`);
-  });
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
 });

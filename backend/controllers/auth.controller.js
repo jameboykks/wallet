@@ -1,69 +1,36 @@
-const { User, OtpCode } = require('../models');
-const bcrypt = require('bcryptjs');
-const { signToken } = require('../utils/jwt');
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { User } from "../models/user.model.js";
 
-exports.register = async (req, res) => {
-  try {
-    const { username, email, password, full_name, phone } = req.body;
+export const AuthController = {
+  async register(req, res) {
+    const { username, email, password } = req.body;
     if (!username || !email || !password)
-      return res.status(400).json({ message: "Missing field" });
-    const hash = await bcrypt.hash(password, 10);
-    await User.create({
-      username, email, password_hash: hash, full_name, phone
-    });
-    res.status(201).json({ message: "Registered successfully" });
-  } catch (e) {
-    res.status(400).json({ message: e.message });
-  }
-};
+      return res.status(400).json({ message: "Thiếu thông tin" });
+    const exist = await User.findByEmail(email);
+    if (exist) return res.status(400).json({ message: "Email đã tồn tại" });
+    const password_hash = await bcrypt.hash(password, 10);
+    const id = await User.create({ username, email, password_hash });
+    return res.json({ message: "Đăng ký thành công", user_id: id });
+  },
 
-exports.login = async (req, res) => {
-  try {
-    const { usernameOrEmail, password } = req.body;
-    const user = await User.findOne({
-      where: {
-        [require('sequelize').Op.or]: [
-          { username: usernameOrEmail },
-          { email: usernameOrEmail }
-        ]
-      }
-    });
-    if (!user || !(await bcrypt.compare(password, user.password_hash)))
-      return res.status(401).json({ message: "Invalid credentials" });
-    if (user.is_locked)
-      return res.status(403).json({ message: "Account is locked" });
-
-    // Nếu bật 2FA, trả về yêu cầu 2FA
-    if (user.two_fa_enabled) {
-      // Tạo OTP
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expires = new Date(Date.now() + 3 * 60 * 1000); // 3 phút
-      await OtpCode.create({ user_id: user.id, code, expires_at: expires });
-      // Gửi OTP, ở đây trả về response luôn (dev), prod thì gửi email
-      return res.status(202).json({ message: "Require 2FA", userId: user.id, code });
-    }
-
-    // Không bật 2FA
-    const token = signToken({ id: user.id, role: "user" });
+  async login(req, res) {
+    const { email, password } = req.body;
+    const user = await User.findByEmail(email);
+    if (!user) return res.status(401).json({ message: "Email không tồn tại" });
+    if (user.is_locked) return res.status(403).json({ message: "Tài khoản bị khoá" });
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return res.status(401).json({ message: "Sai mật khẩu" });
+    const token = jwt.sign(
+      {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        is_admin: user.is_admin
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "2d" }
+    );
     res.json({ token });
-  } catch (e) {
-    res.status(400).json({ message: e.message });
-  }
-};
-
-exports.verify2FA = async (req, res) => {
-  try {
-    const { userId, code } = req.body;
-    const otp = await OtpCode.findOne({
-      where: { user_id: userId, code },
-      order: [['created_at', 'DESC']]
-    });
-    if (!otp || new Date() > otp.expires_at)
-      return res.status(400).json({ message: "OTP invalid or expired" });
-    await OtpCode.destroy({ where: { id: otp.id } });
-    const token = signToken({ id: userId, role: "user" });
-    res.json({ token });
-  } catch (e) {
-    res.status(400).json({ message: e.message });
   }
 };
