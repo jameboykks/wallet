@@ -19,6 +19,7 @@ app.use("/api/user", userRoute);
 app.use("/api/transaction", transactionRoute);
 app.use("/api/notification", notificationRoute);
 app.use("/api/admin", adminRoute);
+app.use('/uploads', express.static('uploads'));
 
 app.get("/", (req, res) => res.json({ message: "E-Wallet API Running" }));
 

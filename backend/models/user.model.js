@@ -1,5 +1,6 @@
 import { pool } from "./db.js";
 
+
 export const User = {
   async findById(id) {
     const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [id]);
@@ -38,3 +39,4 @@ export const User = {
     await pool.query("UPDATE users SET password_hash=? WHERE id=?", [password_hash, id]);
   }
 };
+export default User;

@@ -25,3 +25,4 @@ export const Transaction = {
     return rows[0];
   }
 };
+export default Transaction;

@@ -20,3 +20,5 @@ export const Notification = {
     return rows;
   }
 };
+
+export default Notification;

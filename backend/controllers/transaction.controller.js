@@ -1,69 +1,159 @@
-import { Transaction } from "../models/transaction.model.js";
-import { User } from "../models/user.model.js";
-import { Notification } from "../models/notification.model.js";
+import { User, Transaction, Notification, TwoFAToken } from "../models/index.js";
+// import { Op } from "sequelize";
+import nodemailer from "nodemailer";
+import { pool } from "../models/db.js";
+
+// Gửi OTP qua email (cần App Password, hướng dẫn bên dưới)
+async function sendOTPEmail(toEmail, otpCode) {
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.MAIL_USER, // Email gửi
+      pass: process.env.MAIL_PASS, // App password, không phải mật khẩu Gmail bình thường
+    },
+  });
+  await transporter.sendMail({
+    from: process.env.MAIL_USER,
+    to: toEmail,
+    subject: "Mã xác thực chuyển tiền E-Wallet",
+    text: `Mã OTP chuyển tiền của bạn là: ${otpCode}`,
+    html: `<div>
+      <p><b>Mã OTP chuyển tiền của bạn là:</b></p>
+      <h2>${otpCode}</h2>
+      <p>Hiệu lực trong 5 phút.</p>
+    </div>`,
+  });
+}
 
 export const TransactionController = {
-  async deposit(req, res) {
-    const { amount } = req.body;
-    if (amount <= 0) return res.status(400).json({ message: "Số tiền không hợp lệ" });
-    const user = await User.findById(req.user.id);
-    const newBalance = Number(user.balance) + Number(amount);
-    await User.updateBalance(req.user.id, newBalance);
-    await Transaction.create({
-      user_id: req.user.id,
-      type: "deposit",
-      amount,
-      status: "completed",
-      description: "Nạp tiền vào ví"
-    });
-    await Notification.create({
-      user_id: req.user.id,
-      type: "deposit",
-      message: `Nạp thành công ${amount} vào ví.`
-    });
-    res.json({ message: "Nạp thành công", newBalance });
+  // Nạp tiền vào ví
+  deposit: async (req, res) => {
+    try {
+      const { amount } = req.body;
+      if (amount <= 0) return res.status(400).json({ message: "Số tiền không hợp lệ!" });
+      await pool.query("UPDATE users SET balance = balance + ? WHERE id = ?", [Number(amount), req.user.id]);
+
+      await Transaction.create({
+        user_id: req.user.id,
+        type: 'deposit',
+        amount,
+        status: 'completed',
+        description: 'Nạp tiền vào ví'
+      });
+      await Notification.create({
+        user_id: req.user.id,
+        type: 'deposit',
+        message: `Nạp thành công ${amount} vào ví.`
+      });
+      res.json({ message: "Nạp tiền thành công", newBalance: req.user.balance });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Lỗi server khi nạp tiền!" });
+    }
   },
 
-  async transfer(req, res) {
-    const { to_user_id, amount, description } = req.body;
-    if (amount <= 0) return res.status(400).json({ message: "Số tiền không hợp lệ" });
-    if (to_user_id === req.user.id) return res.status(400).json({ message: "Không thể chuyển cho chính mình" });
-    const sender = await User.findById(req.user.id);
-    const receiver = await User.findById(to_user_id);
-    if (!receiver) return res.status(404).json({ message: "Người nhận không tồn tại" });
-    if (sender.balance < amount) return res.status(400).json({ message: "Số dư không đủ" });
-    await User.updateBalance(req.user.id, sender.balance - amount);
-    await User.updateBalance(to_user_id, Number(receiver.balance) + Number(amount));
-    await Transaction.create({
-      user_id: req.user.id,
-      to_user_id,
-      type: "transfer",
-      amount,
-      status: "completed",
-      description: description || `Chuyển tiền tới ${receiver.username}`
-    });
-    await Notification.create({
-      user_id: req.user.id,
-      type: "transfer",
-      message: `Bạn đã chuyển ${amount} đến ${receiver.username}.`
-    });
-    await Notification.create({
-      user_id: to_user_id,
-      type: "receive",
-      message: `Bạn vừa nhận ${amount} từ ${sender.username}.`
-    });
-    res.json({ message: "Chuyển tiền thành công" });
+  // Chuyển tiền với 2FA OTP
+  transfer: async (req, res) => {
+    try {
+      const { to_user_id, amount, otp } = req.body;
+      const fromUser = req.user;
+
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ message: "Số tiền không hợp lệ!" });
+      }
+
+      const [userRows] = await pool.query("SELECT * FROM users WHERE id=?", [to_user_id]);
+      const toUser = userRows[0];
+      if (!toUser) {
+        return res.status(404).json({ message: "Tài khoản nhận không tồn tại!" });
+      }
+      if (toUser.id === fromUser.id) {
+        return res.status(400).json({ message: "Không thể chuyển cho chính mình!" });
+      }
+      if (fromUser.balance < amount) {
+        return res.status(400).json({ message: "Số dư không đủ!" });
+      }
+
+      // Yêu cầu OTP nếu chưa xác thực
+      if (!otp) {
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        await TwoFAToken.create({
+          user_id: fromUser.id,
+          otp: otpCode,
+          expires_at: new Date(Date.now() + 5 * 60 * 1000),
+          type: 'transfer',
+        });
+        await sendOTPEmail(fromUser.email, otpCode);
+        return res.status(401).json({ message: "Vui lòng nhập mã OTP đã gửi về email của bạn để xác nhận chuyển tiền." });
+      }
+
+      // Kiểm tra OTP hợp lệ
+      const [rows] = await pool.query(
+        "SELECT * FROM twofa_tokens WHERE user_id=? AND otp=? AND type='transfer' AND expires_at > NOW() LIMIT 1",
+        [fromUser.id, otp]
+      );
+      if (!rows.length) {
+        return res.status(400).json({ message: "OTP không đúng hoặc đã hết hạn!" });
+      }
+      const otpRecord = rows[0];
+      // Xóa OTP đã dùng
+      await pool.query("DELETE FROM twofa_tokens WHERE id=?", [otpRecord.id]);
+
+      // Tiến hành chuyển tiền
+      await pool.query("UPDATE users SET balance = balance - ? WHERE id = ?", [amount, fromUser.id]);
+      await pool.query("UPDATE users SET balance = balance + ? WHERE id = ?", [amount, toUser.id]);
+
+      // Lưu transaction
+      await Transaction.create({
+        user_id: fromUser.id,
+        to_user_id: toUser.id,
+        type: 'transfer',
+        amount,
+        status: 'completed',
+        description: `Chuyển tiền đến user #${toUser.id} (${toUser.username})`
+      });
+      await Transaction.create({
+        user_id: toUser.id,
+        to_user_id: fromUser.id,
+        type: 'receive',
+        amount,
+        status: 'completed',
+        description: `Nhận tiền từ user #${fromUser.id} (${fromUser.username})`
+      });
+
+      await Notification.create({
+        user_id: fromUser.id,
+        type: "transfer",
+        message: `Bạn vừa chuyển ${amount} đến ${toUser.username}.`
+      });
+      await Notification.create({
+        user_id: toUser.id,
+        type: "receive",
+        message: `Bạn vừa nhận ${amount} từ ${fromUser.username}.`
+      });
+
+      res.json({ message: "Chuyển tiền thành công!" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Lỗi server khi chuyển tiền!" });
+    }
   },
 
-  async history(req, res) {
-    const transactions = await Transaction.findByUser(req.user.id);
-    res.json(transactions);
+  // Xem lịch sử giao dịch
+  history: async (req, res) => {
+    try {
+      const list = await Transaction.findAll({
+        where: { user_id: req.user.id },
+        order: [["createdAt", "DESC"]],
+        limit: 50,
+      });
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ message: "Lỗi khi lấy lịch sử giao dịch!" });
+    }
   },
 
-  async detail(req, res) {
-    const { id } = req.params;
-    const transaction = await Transaction.findById(id);
-    if (!transaction) return res.status(404).json({ message: "Không tìm thấy giao dịch" });
-    res.json(transaction);
-  }
+  // ... bạn có thể bổ sung các hàm khác ở đây nếu cần
 };
+
+
