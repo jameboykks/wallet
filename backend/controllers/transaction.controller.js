@@ -153,6 +153,30 @@ export const TransactionController = {
     }
   },
 
+  search: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const filters = {
+        startDate: req.query.startDate,
+        endDate: req.query.endDate,
+        type: req.query.type,
+        searchTerm: req.query.searchTerm
+      };
+
+      if (typeof Transaction.search === 'function') {
+        const transactions = await Transaction.search(userId, filters);
+        res.json(transactions);
+      } else {
+        // Nếu Transaction.search chưa có, trả về tất cả giao dịch của user
+        const transactions = await Transaction.findAll({ where: { user_id: userId } });
+        res.json(transactions);
+      }
+    } catch (error) {
+      console.error("Error searching transactions:", error);
+      res.status(500).json({ message: "Error searching transactions" });
+    }
+  },
+
   // ... bạn có thể bổ sung các hàm khác ở đây nếu cần
 };
 

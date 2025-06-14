@@ -7,6 +7,7 @@ const router = Router();
 router.post("/deposit", authenticate, TransactionController.deposit);
 router.post("/transfer", authenticate, TransactionController.transfer);
 router.get("/history", authenticate, TransactionController.history);
+router.get("/search", authenticate, TransactionController.search);
 // router.get("/:id", authenticate, TransactionController.detail);
 
 export default router;
