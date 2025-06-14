@@ -1,36 +1,79 @@
-import { User } from "../models/user.model.js";
-import { Transaction } from "../models/transaction.model.js";
-import { Notification } from "../models/notification.model.js";
+import { pool } from "../models/db.js";
 
 export const AdminController = {
-  async listUsers(req, res) {
-    const users = await User.findAll();
-    res.json(users);
+  // Lấy danh sách tất cả user
+  getAllUsers: async (req, res) => {
+    try {
+      const [users] = await pool.query("SELECT id, username, email, phone, avatar, balance, is_admin, is_locked, created_at FROM users ORDER BY created_at DESC");
+      res.json(users);
+    } catch (err) {
+      res.status(500).json({ message: "Lỗi khi lấy danh sách user" });
+    }
   },
-  async lockUser(req, res) {
-    const { user_id } = req.body;
-    await User.setLock(user_id, 1);
-    res.json({ message: "Đã khoá tài khoản" });
+  // Khoá user
+  lockUser: async (req, res) => {
+    try {
+      const userId = req.params.id;
+      await pool.query("UPDATE users SET is_locked=1 WHERE id=?", [userId]);
+      res.json({ message: "Đã khoá tài khoản" });
+    } catch (err) {
+      res.status(500).json({ message: "Lỗi khi khoá user" });
+    }
   },
-  async unlockUser(req, res) {
-    const { user_id } = req.body;
-    await User.setLock(user_id, 0);
-    res.json({ message: "Đã mở khoá tài khoản" });
+  // Mở khoá user
+  unlockUser: async (req, res) => {
+    try {
+      const userId = req.params.id;
+      await pool.query("UPDATE users SET is_locked=0 WHERE id=?", [userId]);
+      res.json({ message: "Đã mở khoá tài khoản" });
+    } catch (err) {
+      res.status(500).json({ message: "Lỗi khi mở khoá user" });
+    }
   },
-  async listTransactions(req, res) {
-    const trans = await Transaction.findAll();
-    res.json(trans);
+  // Lấy danh sách tất cả giao dịch
+  getAllTransactions: async (req, res) => {
+    try {
+      const [transactions] = await pool.query(`
+        SELECT t.*, u1.username as sender_name, u2.username as receiver_name
+        FROM transactions t
+        LEFT JOIN users u1 ON t.user_id = u1.id
+        LEFT JOIN users u2 ON t.to_user_id = u2.id
+        ORDER BY t.created_at DESC
+      `);
+      res.json(transactions);
+    } catch (err) {
+      res.status(500).json({ message: "Lỗi khi lấy danh sách giao dịch" });
+    }
   },
-  async dashboard(req, res) {
-    // Tổng tiền hệ thống, top giao dịch
-    const users = await User.findAll();
-    const transactions = await Transaction.findAll();
-    const total = users.reduce((s, u) => s + Number(u.balance || 0), 0);
-    const top = transactions.slice(0, 5);
-    res.json({ total_balance: total, top_transactions: top });
+  // Lấy danh sách notification toàn hệ thống
+  getAllNotifications: async (req, res) => {
+    try {
+      const [notifications] = await pool.query(`
+        SELECT n.*, u.username FROM notifications n
+        LEFT JOIN users u ON n.user_id = u.id
+        ORDER BY n.created_at DESC
+      `);
+      res.json(notifications);
+    } catch (err) {
+      res.status(500).json({ message: "Lỗi khi lấy notification" });
+    }
   },
-  async notifications(req, res) {
-    const noti = await Notification.findAll();
-    res.json(noti);
-  }
+  // Thống kê tổng tiền, giao dịch nổi bật
+  getStats: async (req, res) => {
+    try {
+      const [[{ total_balance }]] = await pool.query("SELECT SUM(balance) as total_balance FROM users");
+      const [[{ total_transactions }]] = await pool.query("SELECT COUNT(*) as total_transactions FROM transactions");
+      const [topTransactions] = await pool.query(`
+        SELECT t.*, u1.username as sender_name, u2.username as receiver_name
+        FROM transactions t
+        LEFT JOIN users u1 ON t.user_id = u1.id
+        LEFT JOIN users u2 ON t.to_user_id = u2.id
+        ORDER BY t.amount DESC
+        LIMIT 5
+      `);
+      res.json({ total_balance, total_transactions, topTransactions });
+    } catch (err) {
+      res.status(500).json({ message: "Lỗi khi lấy thống kê" });
+    }
+  },
 };
