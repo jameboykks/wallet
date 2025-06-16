@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Glassmorphism + blob custom effect */
+.glass-card {
+  @apply bg-white/20 backdrop-blur-glass rounded-2xl border border-white/30 shadow-xl;
+  box-shadow: 0 4px 40px 0 rgba(127,95,255,0.15), 0 1.5px 10px 0 rgba(72,198,239,0.16);
+  border: 2px solid rgba(255,255,255,0.13);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 50px 0 rgba(127,95,255,0.25), 0 2px 15px 0 rgba(72,198,239,0.26);
+}
+
+.liquid-gradient {
+  background: linear-gradient(115deg, #7F5FFF 10%, #48C6EF 70%, #E0C3FC 100%);
+  background-size: 200% 200%;
+  animation: moveGradient 4s linear infinite alternate;
+}
+
+@keyframes moveGradient {
+  0% {background-position:0% 50%;}
+  100% {background-position:100% 50%;}
+}
+
+.shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(200,200,255,0.25) 45%, rgba(255,255,255,0) 80%);
+  background-size: 200% 200%;
+  animation: shimmer 2s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {background-position:-200% 0;}
+  100% {background-position:200% 0;}
+}
+
+/* Loading animation */
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #7F5FFF;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Button hover effects */
+.btn-hover-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-hover-effect::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255,255,255,0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.6s ease, height 0.6s ease;
+}
+
+.btn-hover-effect:hover::after {
+  width: 300px;
+  height: 300px;
+}
+
+/* Text glow effect */
+.text-glow {
+  text-shadow: 0 0 10px rgba(127,95,255,0.5),
+               0 0 20px rgba(72,198,239,0.3),
+               0 0 30px rgba(224,195,252,0.2);
+}
+
+/* Custom Scrollbar for glassmorphism effect */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, rgba(79,70,229,0.3), rgba(16,185,129,0.3));
+  border-radius: 8px;
+  border: 2px solid rgba(255,255,255,0.3);
+  box-shadow: 0 2px 8px 0 rgba(79,70,229,0.15);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, rgba(79,70,229,0.5), rgba(16,185,129,0.5));
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Input focus effect */
+.input-focus-effect {
+  transition: all 0.3s ease;
+}
+
+.input-focus-effect:focus {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(127,95,255,0.2);
+}
+
+/* Card hover animation */
+.card-hover {
+  transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 8px 30px rgba(127,95,255,0.2);
+}
+
+/* Pulse animation for notifications */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
