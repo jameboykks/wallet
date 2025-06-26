@@ -76,7 +76,7 @@ export const TransactionController = {
 
       // Yêu cầu OTP nếu chưa xác thực
       if (!otp) {
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpCode = "123456"; // Hardcode OTP
         await TwoFAToken.create({
           user_id: fromUser.id,
           otp: otpCode,
